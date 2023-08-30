@@ -1,16 +1,12 @@
+import os
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
 from langchain import PromptTemplate
 from langchain.chains import RetrievalQA
 from langchain.embeddings import HuggingFaceInstructEmbeddings
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import Chroma
-import transformers
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-from langchain.llms import HuggingFacePipeline
-from transformers import pipeline
-from transformers import AutoModelForCausalLM
+from langchain.llms import HuggingFaceHub
 
 # Check for GPU availability and set the appropriate device for computation.
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -18,49 +14,30 @@ DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 # Global variables
 conversation_retrieval_chain = None
 chat_history = []
-
+llm_hub = None
+embeddings = None
 
 # Function to initialize the language model and its embeddings
 def init_llm():
-    global llm, tokenizer, embeddings
+    global llm_hub, embeddings
+    # Set up the environment variable for HuggingFace and initialize the desired model.
+    os.environ["HUGGINGFACEHUB_API_TOKEN"] = "YOUR HF API KEY"
 
-    # Load models locally
-    #tiiuae/falcon-7b-instruct
-    tokenizer = AutoTokenizer.from_pretrained("tiiuae/falcon-7b",trust_remote_code=True)
+    #name the model
+    model_id = "tiiuae/falcon-7b-instruct"
+    # load the model into the HuggingFaceHub
+    llm_hub = HuggingFaceHub(repo_id=model_id, model_kwargs={"temperature": 0.1, "max_new_tokens": 600, "max_length": 600})
 
-    #tokenizer = AutoTokenizer.from_pretrained("databricks/dolly-v2-3b",trust_remote_code=True)
-    #model = AutoModelForCausalLM.from_pretrained("databricks/dolly-v2-3b",trust_remote_code=True)
-    #google/flan-t5-xl
-    #model = AutoModelForSeq2SeqLM.from_pretrained("tiiuae/falcon-7b",trust_remote_code=True
-                                                #load_in_8bit=True,
-                                            #    device_map='auto',
-                                                #   torch_dtype=torch.float16,
-                                            #    low_cpu_mem_usage=True)
-    
-    model = AutoModelForCausalLM.from_pretrained("tiiuae/falcon-7b", trust_remote_code=True)
-    embeddings = HuggingFaceInstructEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", 
-                                                          model_kwargs={"device": DEVICE}
-                                                          )
-    
-    pipe = pipeline("text-generation", model=model, trust_remote_code=True,repetition_penalty=1.15,max_length=2048,tokenizer=tokenizer)
+    #Initialize embeddings using a pre-trained model to represent the text data.
+    embeddings = HuggingFaceInstructEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": DEVICE}
+    )
 
-                                                  
-    # pipe = pipeline(
-    #     "text2text-generation",
-    #     model=model, 
-    #     tokenizer=tokenizer, 
-    #     max_length=2048,
-    #     temperature=0,
-    #     top_p=0.95,
-    #     repetition_penalty=1.15
-    #     )
-
-    llm = HuggingFacePipeline(pipeline=pipe)
-    #return llm, tokenizer, embeddings
+    return llm_hub, embeddings
 
 # Function to process a PDF document
 def process_document(document_path):
-    global conversation_retrieval_chain
+    global llm_hub, embeddings, conversation_retrieval_chain
 
     # Load the document
     loader = PyPDFLoader(document_path)
@@ -73,15 +50,29 @@ def process_document(document_path):
     # Create an embeddings database using Chroma from the split text chunks.
     db = Chroma.from_documents(texts, embedding=embeddings)
 
-    retriever = db.as_retriever(search_type="mmr", search_kwargs={'k': 1, 'lambda_mult': 0.25})
     
-    # Build the QA chain, which utilizes the model and retriever for answering questions.
+    ######-----> if you you interested in defining the template for the questions that'll be used with the LLM. <----######
+    # template = """
+    # provide reasonable response and structure it properly based on the following context and Question from user:
+    # context: {context}
+    # Question: {question}
+    # """
+    # prompt = PromptTemplate(template=template, input_variables=["context", "question"])
+
+    # Build the QA chain, which utilizes the LLM and retriever for answering questions.
+    '''
+    By default, the vectorstore retriever uses similarity search. If the underlying vectorstore support maximum marginal relevance search, you can specify that as the search type.
+    retriever = db.as_retriever(search_type="mmr")
+    You can also specify search kwargs like k to use when doing retrieval. k represent how many search results send to llm
+    '''
     conversation_retrieval_chain = RetrievalQA.from_chain_type(
-        llm=llm,
+        llm=llm_hub,
         chain_type="stuff",
-        retriever= retriever,
+        retriever=db.as_retriever(search_type="mmr", search_kwargs={'k': 4, 'lambda_mult': 0.25}),
         return_source_documents=False
+     #   chain_type_kwargs={"prompt": prompt}
     )
+
 
 # Function to process a user prompt
 def process_prompt(prompt):
@@ -99,4 +90,4 @@ def process_prompt(prompt):
     return answer
 
 # Initialize the language model
-init_llm()
+llm_hub, embeddings = init_llm()
