@@ -49,14 +49,6 @@ def process_document(document_path):
     # Create an embeddings database using Chroma from the split text chunks.
     db = Chroma.from_documents(texts, embedding=embeddings)
 
-    
-    ######-----> if you you interested in defining the template for the questions that'll be used with the LLM. <----######
-    # template = """
-    # provide reasonable response and structure it properly based on the following context and Question from user:
-    # context: {context}
-    # Question: {question}
-    # """
-    # prompt = PromptTemplate(template=template, input_variables=["context", "question"])
 
     # --> Build the QA chain, which utilizes the LLM and retriever for answering questions. <--
     # By default, the vectorstore retriever uses similarity search. 
@@ -65,9 +57,11 @@ def process_document(document_path):
     conversation_retrieval_chain = RetrievalQA.from_chain_type(
         llm=llm_hub,
         chain_type="stuff",
-        retriever=db.as_retriever(search_type="mmr", search_kwargs={'k': 4, 'lambda_mult': 0.25}),
-        return_source_documents=False
+        retriever=db.as_retriever(search_type="mmr", search_kwargs={'k': 6, 'lambda_mult': 0.25}),
+        return_source_documents=False,
+        input_key = "question"
      #   chain_type_kwargs={"prompt": prompt} # if you are using prompt template, you need to uncomment this part
+
     )
 
 
