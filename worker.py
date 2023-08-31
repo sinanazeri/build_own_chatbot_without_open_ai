@@ -23,7 +23,7 @@ def init_llm():
     # Set up the environment variable for HuggingFace and initialize the desired model.
     os.environ["HUGGINGFACEHUB_API_TOKEN"] = "YOUR HF API KEY"
 
-    #name the model
+    # repo name for the model
     model_id = "tiiuae/falcon-7b-instruct"
     # load the model into the HuggingFaceHub
     llm_hub = HuggingFaceHub(repo_id=model_id, model_kwargs={"temperature": 0.1, "max_new_tokens": 600, "max_length": 600})
@@ -33,11 +33,10 @@ def init_llm():
         model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": DEVICE}
     )
 
-    return llm_hub, embeddings
 
 # Function to process a PDF document
 def process_document(document_path):
-    global llm_hub, embeddings, conversation_retrieval_chain
+    global conversation_retrieval_chain
 
     # Load the document
     loader = PyPDFLoader(document_path)
@@ -59,18 +58,16 @@ def process_document(document_path):
     # """
     # prompt = PromptTemplate(template=template, input_variables=["context", "question"])
 
-    # Build the QA chain, which utilizes the LLM and retriever for answering questions.
-    '''
-    By default, the vectorstore retriever uses similarity search. If the underlying vectorstore support maximum marginal relevance search, you can specify that as the search type.
-    retriever = db.as_retriever(search_type="mmr")
-    You can also specify search kwargs like k to use when doing retrieval. k represent how many search results send to llm
-    '''
+    # --> Build the QA chain, which utilizes the LLM and retriever for answering questions. <--
+    # By default, the vectorstore retriever uses similarity search. 
+    # If the underlying vectorstore support maximum marginal relevance search, you can specify that as the search type (search_type="mmr").
+    # You can also specify search kwargs like k to use when doing retrieval. k represent how many search results send to llm
     conversation_retrieval_chain = RetrievalQA.from_chain_type(
         llm=llm_hub,
         chain_type="stuff",
         retriever=db.as_retriever(search_type="mmr", search_kwargs={'k': 4, 'lambda_mult': 0.25}),
         return_source_documents=False
-     #   chain_type_kwargs={"prompt": prompt}
+     #   chain_type_kwargs={"prompt": prompt} # if you are using prompt template, you need to uncomment this part
     )
 
 
@@ -90,4 +87,4 @@ def process_prompt(prompt):
     return answer
 
 # Initialize the language model
-llm_hub, embeddings = init_llm()
+init_llm()
