@@ -50,7 +50,7 @@ def process_document(document_path):
     db = Chroma.from_documents(texts, embedding=embeddings)
 
 
-    # --> Build the QA chain, which utilizes the LLM and retriever for answering questions. <--
+    # --> Build the QA chain, which utilizes the LLM and retriever for answering questions. 
     # By default, the vectorstore retriever uses similarity search. 
     # If the underlying vectorstore support maximum marginal relevance search, you can specify that as the search type (search_type="mmr").
     # You can also specify search kwargs like k to use when doing retrieval. k represent how many search results send to llm
