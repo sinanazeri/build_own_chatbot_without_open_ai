@@ -21,7 +21,7 @@ embeddings = None
 def init_llm():
     global llm_hub, embeddings
     # Set up the environment variable for HuggingFace and initialize the desired model.
-    os.environ["HUGGINGFACEHUB_API_TOKEN"] = "YOUR HF API KEY"
+    os.environ["HUGGINGFACEHUB_API_TOKEN"] = "YOUR API KEY"
 
     # repo name for the model
     model_id = "tiiuae/falcon-7b-instruct"
@@ -71,7 +71,7 @@ def process_prompt(prompt):
     global chat_history
     
     # Query the model
-    output = conversation_retrieval_chain(prompt)
+    output = conversation_retrieval_chain({"question": prompt, "chat_history": chat_history})
     answer = output["result"]
     
     # Update the chat history
