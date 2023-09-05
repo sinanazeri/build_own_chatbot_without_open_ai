@@ -21,47 +21,40 @@ embeddings = None
 def init_llm():
     global llm_hub, embeddings
     # Set up the environment variable for HuggingFace and initialize the desired model.
-    os.environ["HUGGINGFACEHUB_API_TOKEN"] = "YOUR API KEY"
+    os.environ["HUGGINGFACEHUB_API_TOKEN"] = "Your HuggingFace API"
 
-    # repo name for the model
+    # Insert the name of repo model
     model_id = "tiiuae/falcon-7b-instruct"
+    
     # load the model into the HuggingFaceHub
-    llm_hub = HuggingFaceHub(repo_id=model_id, model_kwargs={"temperature": 0.1, "max_new_tokens": 600, "max_length": 600})
+    llm_hub = # specify hugging face hub object with (repo_id, model_kwargs={"temperature": 0.1, "max_new_tokens": 600, "max_length": 600})
+    
 
     #Initialize embeddings using a pre-trained model to represent the text data.
-    embeddings = HuggingFaceInstructEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": DEVICE}
-    )
-
+    embeddings = # create object of Hugging Face Instruct Embeddings with (model_name,  model_kwargs={"device": DEVICE} )
+    
 
 # Function to process a PDF document
 def process_document(document_path):
     global conversation_retrieval_chain
-
     # Load the document
-    loader = PyPDFLoader(document_path)
-    documents = loader.load()
+    loader =   # ---> use PyPDFLoader and document_path from the function input parameter <---
     
-    # Split the document into chunks
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=64)
+    documents = loader.load()
+    # Split the document into chunks, set chunk_size=1024, and chunk_overlap=64. assign it to variable text_splitter
+    text_splitter = # ---> use Recursive Character TextSplitter and specify the input parameters <---
+    
     texts = text_splitter.split_documents(documents)
     
     # Create an embeddings database using Chroma from the split text chunks.
     db = Chroma.from_documents(texts, embedding=embeddings)
-
-
-    # --> Build the QA chain, which utilizes the LLM and retriever for answering questions. 
-    # By default, the vectorstore retriever uses similarity search. 
-    # If the underlying vectorstore support maximum marginal relevance search, you can specify that as the search type (search_type="mmr").
-    # You can also specify search kwargs like k to use when doing retrieval. k represent how many search results send to llm
+    
+    # Build the QA chain, which utilizes the LLM and retriever for answering questions.
     conversation_retrieval_chain = RetrievalQA.from_chain_type(
         llm=llm_hub,
         chain_type="stuff",
-        retriever=db.as_retriever(search_type="mmr", search_kwargs={'k': 6, 'lambda_mult': 0.25}),
-        return_source_documents=False,
-        input_key = "question"
-     #   chain_type_kwargs={"prompt": prompt} # if you are using prompt template, you need to uncomment this part
-
+        retriever= db.as_retriever(search_type="mmr", search_kwargs={'k': 6, 'lambda_mult': 0.25}),
+        return_source_documents=False
     )
 
 
@@ -69,16 +62,18 @@ def process_document(document_path):
 def process_prompt(prompt):
     global conversation_retrieval_chain
     global chat_history
-    
-    # Query the model
+    # Pass the prompt and the chat history to the conversation_retrieval_chain object
     output = conversation_retrieval_chain({"question": prompt, "chat_history": chat_history})
-    answer = output["result"]
+    
+    answer =  output["result"]
     
     # Update the chat history
-    chat_history.append((prompt, answer))
+    # TODO: Append the prompt and the bot's response to the chat history using chat_history.append and pass `prompt` `answer` as arguments
+    # --> write your code here <--	
     
     # Return the model's response
-    return answer
+    return result['answer']
+    
 
 # Initialize the language model
 init_llm()
