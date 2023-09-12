@@ -7,6 +7,10 @@ from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import Chroma
 from langchain.llms import HuggingFaceHub
+from ibm_watson_machine_learning.foundation_models.extensions.langchain import WatsonxLLM
+from ibm_watson_machine_learning.foundation_models.utils.enums import ModelTypes, DecodingMethods
+from ibm_watson_machine_learning.metanames import GenTextParamsMetaNames as GenParams
+from ibm_watson_machine_learning.foundation_models import Model
 
 # Check for GPU availability and set the appropriate device for computation.
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -17,22 +21,36 @@ chat_history = []
 llm_hub = None
 embeddings = None
 
+Watsonx_API = "Your WatsonX API"
+Project_id= "Your Project ID"
+
 # Function to initialize the language model and its embeddings
 def init_llm():
     global llm_hub, embeddings
-    # Set up the environment variable for HuggingFace and initialize the desired model.
-    os.environ["HUGGINGFACEHUB_API_TOKEN"] = "Your HuggingFace API"
+    
+    params = {
+    GenParams.MAX_NEW_TOKENS: 250, # maximum number of tokens
+    GenParams.MIN_NEW_TOKENS: 1,
+    GenParams.DECODING_METHOD: DecodingMethods.SAMPLE,
+    GenParams.TEMPERATURE: 0.5,
+    GenParams.TOP_K: 50,
+    GenParams.TOP_P: 1}
+    
+    credentials = {
+        'url': "https://us-south.ml.cloud.ibm.com",
+        'apikey' : Watsonx_API
+    }
+    
+    LLAMA2_model = Model(
+        model_id= 'meta-llama/llama-2-70b-chat',
+        credentials=credentials,
+        params=params,
+        project_id=Project_id)
 
-    # Insert the name of repo model
-    model_id = "tiiuae/falcon-7b-instruct"
-    
-    # load the model into the HuggingFaceHub
-    llm_hub = # specify hugging face hub object with (repo_id, model_kwargs={"temperature": 0.1, "max_new_tokens": 600, "max_length": 600})
-    
+    llm_hub = WatsonxLLM(model=LLAMA2_model)
 
     #Initialize embeddings using a pre-trained model to represent the text data.
-    embeddings = # create object of Hugging Face Instruct Embeddings with (model_name,  model_kwargs={"device": DEVICE} )
-    
+    embeddings =  # create object of Hugging Face Instruct Embeddings with (model_name,  model_kwargs={"device": DEVICE} )
 
 # Function to process a PDF document
 def process_document(document_path):
