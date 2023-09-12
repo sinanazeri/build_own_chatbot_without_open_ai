@@ -4,7 +4,7 @@ pdf2image
 chromadb
 pypdf
 tiktoken
-pandas==2.0.3
+pandas==1.5
 langchain==0.0.254
 atlassian-python-api==3.36.0
 chromadb==0.3.25
