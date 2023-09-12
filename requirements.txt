@@ -15,3 +15,4 @@ InstructorEmbedding==1.0.0
 p4python==2023.1.2454917
 lxml==4.9.2
 bs4==0.0.1
+ibm-watson-machine-learning
