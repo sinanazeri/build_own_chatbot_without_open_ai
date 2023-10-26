@@ -1,4 +1,6 @@
 import os
+import time
+from os import getenv
 import torch
 from langchain import PromptTemplate
 from langchain.chains import RetrievalQA
@@ -7,6 +9,7 @@ from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import Chroma
 from langchain.llms import HuggingFaceHub
+# from sentence_transformers import SentenceTransformer
 from ibm_watson_machine_learning.foundation_models.extensions.langchain import WatsonxLLM
 from ibm_watson_machine_learning.foundation_models.utils.enums import ModelTypes, DecodingMethods
 from ibm_watson_machine_learning.metanames import GenTextParamsMetaNames as GenParams
@@ -21,8 +24,8 @@ chat_history = []
 llm_hub = None
 embeddings = None
 
-Watsonx_API = "Your WatsonX API"
-Project_id= "Your Project ID"
+Watsonx_API = getenv("WATSONX_AI_API_KEY")
+Project_id= getenv("WATSONX_AI_PROJECT")
 
 # Function to initialize the language model and its embeddings
 def init_llm():
@@ -51,19 +54,30 @@ def init_llm():
     llm_hub = WatsonxLLM(model=LLAMA2_model)
 
     #Initialize embeddings using a pre-trained model to represent the text data.
-    embeddings =  # create object of Hugging Face Instruct Embeddings with (model_name,  model_kwargs={"device": DEVICE} )
+    model = "sentence-transformers/all-MiniLM-L6-v2"
+    # model = "llmrails/ember-v1"
+    embeddings = HuggingFaceInstructEmbeddings(
+        model_name=model, model_kwargs={"device": DEVICE}
+    )
 
 # Function to process a PDF document
 def process_document(document_path):
+    start_time = time.time()
     global conversation_retrieval_chain
     # Load the document
-    loader =   # ---> use PyPDFLoader and document_path from the function input parameter <---
-    
+    loader =   PyPDFLoader(document_path) # ---> use PyPDFLoader and document_path from the function input parameter <---
     documents = loader.load()
     # Split the document into chunks, set chunk_size=1024, and chunk_overlap=64. assign it to variable text_splitter
-    text_splitter = # ---> use Recursive Character TextSplitter and specify the input parameters <---
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=64)
     
     texts = text_splitter.split_documents(documents)
+
+    # Print out split text    
+    # n = 0
+    # for text in texts:        
+    #     print(str(n) + ": " + str(text))
+    #     n = n + 1
+
     
     # Create an embeddings database using Chroma from the split text chunks.
     db = Chroma.from_documents(texts, embedding=embeddings)
@@ -75,23 +89,32 @@ def process_document(document_path):
         retriever= db.as_retriever(search_type="mmr", search_kwargs={'k': 6, 'lambda_mult': 0.25}),
         return_source_documents=False
     )
+    
+    end_time = time.time()
+    # Print the elapsed time
+    print(f"Time taken to process the document: {end_time - start_time:.6f} seconds")
 
 
 # Function to process a user prompt
 def process_prompt(prompt):
+    # Start the timer
+    start_time = time.time()
     global conversation_retrieval_chain
     global chat_history
     # Pass the prompt and the chat history to the conversation_retrieval_chain object
-    output = conversation_retrieval_chain({"question": prompt, "chat_history": chat_history})
+    output = conversation_retrieval_chain({"query": prompt, "chat_history": chat_history})
     
     answer =  output["result"]
     
     # Update the chat history
-    # TODO: Append the prompt and the bot's response to the chat history using chat_history.append and pass `prompt` `answer` as arguments
-    # --> write your code here <--	
+    chat_history.append((prompt, answer))
     
     # Return the model's response
-    return result['answer']
+    end_time = time.time()
+    
+    # Print the elapsed time
+    print(f"Time taken to process the prompt: {end_time - start_time:.6f} seconds")
+    return answer
     
 
 # Initialize the language model

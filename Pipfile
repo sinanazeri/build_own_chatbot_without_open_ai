@@ -1,0 +1,28 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+Flask = "*"
+Flask_Cors = "*"
+pdf2image = "*"
+chromadb = "==0.3.25"
+pypdf = "*"
+tiktoken = "*"
+pandas = "==1.5"
+langchain = "==0.0.254"
+atlassian-python-api = "==3.36.0"
+huggingface-hub = "==0.16.4"
+torch = "==2.0.1"
+sentence-transformers = "*"
+InstructorEmbedding = "==1.0.0"
+p4python = "==2023.1.2454917"
+lxml = "==4.9.2"
+bs4 = "==0.0.1"
+ibm-watson-machine-learning = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.10"
