@@ -1,19 +1,18 @@
 import os
 import torch
-from langchain import PromptTemplate
-from langchain.chains import RetrievalQA
-from langchain.embeddings import HuggingFaceInstructEmbeddings
-from langchain.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores import Chroma
-from langchain.llms import HuggingFaceHub
-from ibm_watson_machine_learning.foundation_models.extensions.langchain import WatsonxLLM
-from ibm_watson_machine_learning.foundation_models.utils.enums import ModelTypes, DecodingMethods
-from ibm_watson_machine_learning.metanames import GenTextParamsMetaNames as GenParams
-from ibm_watson_machine_learning.foundation_models import Model
+import logging
 
-from langchain import PromptTemplate
-#from langchain.chains import LLMChain, SimpleSequentialChain
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+from langchain_core.prompts import PromptTemplate  # Updated import per deprecation notice
+from langchain.chains import RetrievalQA
+from langchain_community.embeddings import HuggingFaceInstructEmbeddings  # New import path
+from langchain_community.document_loaders import PyPDFLoader  # New import path
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Chroma  # New import path
+from langchain_ibm import WatsonxLLM
 
 # Check for GPU availability and set the appropriate device for computation.
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -24,33 +23,35 @@ chat_history = []
 llm_hub = None
 embeddings = None
 
-Watsonx_API = "Your WatsonX API"
-Project_id= "Your Project ID"
 # Function to initialize the language model and its embeddings
 def init_llm():
     global llm_hub, embeddings
 
-    params = {
-    GenParams.MAX_NEW_TOKENS: 250, # maximum number of tokens
-    GenParams.MIN_NEW_TOKENS: 1,
-    GenParams.DECODING_METHOD: DecodingMethods.SAMPLE,
-    GenParams.TEMPERATURE: 0.5,
-    GenParams.TOP_K: 50,
-    GenParams.TOP_P: 1
-    }
-    credentials = {
-        'url': "https://us-south.ml.cloud.ibm.com",
-        'apikey' : Watsonx_API
-    }
-    
-    LLAMA2_model = Model(
-        model_id= 'meta-llama/llama-2-70b-chat', # or use --> ModelTypes.LLAMA_2_70B_CHAT,
-        credentials=credentials,
-        params=params,
-        project_id=Project_id)
+    logger.info("Initializing WatsonxLLM and embeddings...")
 
-    llm_hub = WatsonxLLM(model=LLAMA2_model)
+    # Llama Model Configuration
+    MODEL_ID = "meta-llama/llama-3-3-70b-instruct"
+    WATSONX_URL = "https://us-south.ml.cloud.ibm.com"
+    PROJECT_ID = "skills-network"
 
+    # Use the same parameters as before:
+    #   MAX_NEW_TOKENS: 256, TEMPERATURE: 0.1
+    model_parameters = {
+        # "decoding_method": "greedy",
+        "max_new_tokens": 256,
+        "temperature": 0.1,
+    }
+
+    # Initialize Llama LLM using the updated WatsonxLLM API
+    llm_hub = WatsonxLLM(
+        model_id=MODEL_ID,
+        url=WATSONX_URL,
+        project_id=PROJECT_ID,
+        params=model_parameters
+    )
+    logger.debug("WatsonxLLM initialized: %s", llm_hub)
+
+    # Initialize embeddings using a pre-trained model to represent the text data.
     ### --> if you are using huggingFace API:
     # Set up the environment variable for HuggingFace and initialize the desired model, and load the model into the HuggingFaceHub
     # dont forget to remove llm_hub for watsonX
@@ -58,57 +59,70 @@ def init_llm():
     # os.environ["HUGGINGFACEHUB_API_TOKEN"] = "YOUR API KEY"
     # model_id = "tiiuae/falcon-7b-instruct"
     #llm_hub = HuggingFaceHub(repo_id=model_id, model_kwargs={"temperature": 0.1, "max_new_tokens": 600, "max_length": 600})
-
-    #Initialize embeddings using a pre-trained model to represent the text data.
+    
     embeddings = HuggingFaceInstructEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2", model_kwargs={"device": DEVICE}
+        model_name="sentence-transformers/all-MiniLM-L6-v2", 
+        model_kwargs={"device": DEVICE}
     )
-
+    logger.debug("Embeddings initialized with model device: %s", DEVICE)
 
 # Function to process a PDF document
 def process_document(document_path):
     global conversation_retrieval_chain
 
+    logger.info("Loading document from path: %s", document_path)
     # Load the document
     loader = PyPDFLoader(document_path)
     documents = loader.load()
-    
+    logger.debug("Loaded %d document(s)", len(documents))
+
     # Split the document into chunks
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=64)
     texts = text_splitter.split_documents(documents)
-    
+    logger.debug("Document split into %d text chunks", len(texts))
+
     # Create an embeddings database using Chroma from the split text chunks.
+    logger.info("Initializing Chroma vector store from documents...")
     db = Chroma.from_documents(texts, embedding=embeddings)
+    logger.debug("Chroma vector store initialized.")
 
+    # Optional: Log available collections if accessible (this may be internal API)
+    try:
+        collections = db._client.list_collections()  # _client is internal; adjust if needed
+        logger.debug("Available collections in Chroma: %s", collections)
+    except Exception as e:
+        logger.warning("Could not retrieve collections from Chroma: %s", e)
 
-    # --> Build the QA chain, which utilizes the LLM and retriever for answering questions. 
-    # By default, the vectorstore retriever uses similarity search. 
-    # If the underlying vectorstore support maximum marginal relevance search, you can specify that as the search type (search_type="mmr").
-    # You can also specify search kwargs like k to use when doing retrieval. k represent how many search results send to llm
+    # Build the QA chain, which utilizes the LLM and retriever for answering questions. 
     conversation_retrieval_chain = RetrievalQA.from_chain_type(
         llm=llm_hub,
         chain_type="stuff",
         retriever=db.as_retriever(search_type="mmr", search_kwargs={'k': 6, 'lambda_mult': 0.25}),
         return_source_documents=False,
-        input_key = "question"
-     #   chain_type_kwargs={"prompt": prompt} # if you are using prompt template, you need to uncomment this part
+        input_key="question"
+        # chain_type_kwargs={"prompt": prompt}  # if you are using a prompt template, uncomment this part
     )
-
+    logger.info("RetrievalQA chain created successfully.")
 
 # Function to process a user prompt
 def process_prompt(prompt):
     global conversation_retrieval_chain
     global chat_history
-    
-    # Query the model
-    output = conversation_retrieval_chain({"question": prompt, "chat_history": chat_history})
+
+    logger.info("Processing prompt: %s", prompt)
+    # Query the model using the new .invoke() method
+    output = conversation_retrieval_chain.invoke({"question": prompt, "chat_history": chat_history})
     answer = output["result"]
-    
+    logger.debug("Model response: %s", answer)
+
     # Update the chat history
     chat_history.append((prompt, answer))
-    
+    logger.debug("Chat history updated. Total exchanges: %d", len(chat_history))
+
     # Return the model's response
     return answer
 
 # Initialize the language model
 init_llm()
+logger.info("LLM and embeddings initialization complete.")
+
